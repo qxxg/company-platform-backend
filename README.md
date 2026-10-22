@@ -1,16 +1,71 @@
 # 公司管理系统（company-platform）
 
+![JDK](https://img.shields.io/badge/JDK-27-orange?style=flat-square) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-brightgreen?style=flat-square) ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.0.3-0d6a8c?style=flat-square) ![Spring Authorization Server](https://img.shields.io/badge/Authorization%20Server-1.5.8-9b59b6?style=flat-square) ![MyBatis-Flex](https://img.shields.io/badge/MyBatis--Flex-1.11.8-2f6c9e?style=flat-square) ![ShardingSphere](https://img.shields.io/badge/ShardingSphere--JDBC-5.5.3-6a4c93?style=flat-square) ![Nacos](https://img.shields.io/badge/Nacos-3.0.3-4d7bff?style=flat-square) ![MySQL](https://img.shields.io/badge/MySQL-9.7-4479a1?style=flat-square) ![Maven](https://img.shields.io/badge/Maven-3.10-c71a36?style=flat-square) ![Vue](https://img.shields.io/badge/PC%20Web-Vue%203-42b883?style=flat-square)
+
 以 `docs/公司管理系统-模块功能规划-v1.4.md` 的业务规则为基线，采用 Spring Cloud 微服务 + Vue 3 PC Web 的可运行第一阶段骨架。当前版本重点完成**统一认证、网关、基础系统数据、客户与合同主数据、订单写入与分库分表、财务应收/收款/开票/对账、费用报销与借款/还款、设备台账与厂内排产队列、设备维护与点检、仓储（仓库/物料/采购入库/跨厂调拨）、流程审批中心、设备数据上报（MQTT/CoAP/HTTP 与 IoTDB）、本地 AI 助手（只读）、首页大屏与 BI 聚合、PC Web 基础业务页面**。
 
 > 代码已拆分为两个独立仓库：本仓库（后端，`company-platform-backend`）与前端仓库 `company-platform-frontend`（目录 `company-platform-web`）。前端只通过网关 `/api/**` 访问后端，不依赖后端源码。
 
 > V1.4 是当前有效版本，V1.0–V1.3 已废弃。业务实现时必须继续遵守 V1.4 中的金额截断、合同关联、信用与逾期、排队审批、MQTT/CoAP 上报等 33 条已确认规则。
 
+## 0. 项目概览
+
+> 交付重点概览：本章集中说明**项目结构**、**功能**、**技术架构**与**部署启动流程**，各对应章节 1–11 再做细节展开。
+
+### 0.1 项目结构
+
+后端仓库 `company-platform-backend`（本地目录 `company-platform`）为单 Maven 多模块 + Spring Cloud 微服务后端；PC Web 前端已拆分为独立仓库 `company-platform-frontend`（本地目录 `company-platform-web`），通过网关 `/api/**` 访问后端，前端不依赖后端源码。
+
+```text
+company-platform/                       # 后端 company-platform-backend
+├── pom.xml                             # 聚合父工程：JDK 27 / Spring Boot 3.5 / Spring Cloud 2025.0.3 / Spring Cloud Alibaba 2025.0.0.0
+├── build.log                           # 本地构建输出
+├── README.md                           # 本文档
+├── config/                             # 本地配置（如 application-iot.yml）
+├── data/                               # 本地运行时数据（git 忽略）
+├── docs/                               # 业务规则与需求文档（V1.4 为有效基线）
+├── sql/                                # 数据库初始化 / 修复脚本（01~18）
+├── scripts/                            # 脚本
+│   ├── dev/                            #   启动 / 停止 / 状态 / 构建 / 冒烟
+│   ├── remote/                         #   远程库初始化 / 清理冒烟数据 / 验证
+│   └── ubuntu-setup/                  #   中间件安装
+├── platform-ai/                        # 本地 AI 助手（Ollama + AgentScope ReAct，只读）
+├── platform-approval/                  # 流程审批中心（审批定义 / 实例 / 待办 / 业务动作）
+├── platform-auth/                      # 统一认证（OAuth2 + JWT，授权码 + PKCE）
+├── platform-bi/                        # 首页大屏 / BI（只读 ETL + 指标语义层）
+├── platform-common/                    # 公共模块（common-web / common-bom）
+├── platform-customer/                  # 客户 / 合同 / 财务 / 费用报销 / 借款 / 信用
+├── platform-gateway/                   # API 网关
+├── platform-order/                     # 订单 / 设备 / 生产 / 仓储 / 消息
+└── platform-system/                    # 系统 / 用户 / 权限 / 工厂
+```
+
+### 0.2 功能
+
+本阶段（V1.4）已交付能力：统一认证、网关、基础系统数据；客户与合同主数据、信用与逾期；订单写入与分库分表；财务应收/收款/开票/对账；费用报销与借款/还款；设备台账与厂内排产队列、维护与点检；仓储（仓库/物料/采购入库/跨厂调拨）；流程审批中心；设备数据上报（MQTT/CoAP/HTTP + IoTDB）；本地 AI 助手（只读）；首页大屏与 BI 聚合；PC Web 基础业务页面。V1.0–V1.3 已废弃；V1.4 的金额截断、合同关联、信用/逾期、排队审批、MQTT/CoAP 上报等 33 条已确认规则继续生效。
+
+### 0.3 技术架构
+
+JDK 27 + Spring Boot 3.5 + Spring Cloud 2025.0.3 + Spring Cloud Alibaba 2025.0.0.0（Nacos / Gateway）+ Spring Security 6 / Spring Authorization Server 1.5；MyBatis-Flex、ShardingSphere-JDBC、AgentScope、Ollama；PC Web 为 Vue 3 + Vite 7 + Element Plus + Pinia + Vue Router + Axios + ECharts 6。
+
+### 0.4 部署启动流程
+
+1. 构建：`powershell -ExecutionPolicy Bypass -File scripts/dev/build.ps1`；
+2. 数据库初始化：`sql/01~18` 顺序执行（见第 4.3 节）；
+3. Nacos 注册中心：见第 4.4 节；
+4. 中间件依赖：见第 2 节；
+5. 服务启动：见第 4.5 节；
+6. PC Web 前端启动：见第 4.6 节；
+7. 本地 Ollama 模型：见第 4.7 节；
+8. 冒烟测试：见第 4.8 节。
+
+各步骤的详细命令、端口与排障说明见对应章节。
+
 ## 1. 当前完成情况
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| Nacos 注册中心 | 已完成 | 外部部署于 `192.168.3.44:8848`，控制台 `192.168.3.44:8080`；原 `platform-registry` 模块已移除 |
+| Nacos 注册中心 | 已完成 | 外部部署于 `你的IP地址:8848`，控制台 `你的IP地址:8080`；原 `platform-registry` 模块已移除 |
 | `platform-auth` | 已完成基础能力 | Spring Authorization Server、JWT/JWK、OAuth2 授权码 + PKCE、客户端凭证、JDBC 客户端与授权持久化、种子用户 |
 | `platform-system` | 已完成基础能力 | JWT 资源服务器、`/me`、用户列表、工厂列表、MyBatis-Flex |
 | `platform-customer` | 已完成基础能力 | 客户主数据、归属数据范围、合同录入、信用应收上下文、财务应收与收款核销、手工开票、客户对账单、费用报销、借款与还款、订单前置校验内部接口、信用额度审批落地内部接口 |
@@ -54,7 +109,7 @@
 
   platform-ai :9106  ──JWT 透传──►  platform-order / platform-customer / platform-approval
            |
-           +──► Ollama 0.40.8  192.168.3.44:11434（本地 Qwen3-4B，只读推理）
+           +──► Ollama 0.40.8  你的IP地址:11434（本地 Qwen3-4B，只读推理）
 
    platform-bi :9105  ──只读 ETL──►  company_platform(3306) / company_order0(3306) / company_order1(3307)
            |
@@ -62,12 +117,12 @@
            +──► 对外只查询 company_bi，不直接读写业务表
 
   注册中心：platform-auth / platform-system / platform-customer / platform-order / platform-approval / platform-ai / platform-bi / platform-gateway
-            └──────────────► Nacos 3.0.3  192.168.3.44:8848
+            └──────────────► Nacos 3.0.3  你的IP地址:8848
 ```
 
 服务启动后向 Nacos 注册，网关通过 `lb://platform-system`、`lb://platform-customer`、`lb://platform-order`、`lb://platform-approval`、`lb://platform-ai`、`lb://platform-bi` 从 Nacos 获取实例并负载均衡。订单服务通过 `lb://platform-customer` 调用客户/合同校验接口，审批中心通过 `lb://platform-customer` 落地审批通过后的业务变更，AI 服务通过 `lb://platform-order`、`lb://platform-customer`、`lb://platform-approval` 调用已有只读接口；三者都透传当前用户 JWT 以保留数据范围。BI 服务不复用业务接口，而是自己只读抽取三个业务库写入独立集市，再对外提供聚合查询。Nacos 与业务服务分离部署，业务进程不再内置注册中心。
 
-中间件部署在 `192.168.3.44`：MySQL 9.7.2（3306/3307）、Redis 8.10.2（6379）、EMQX 5.8.9（1883/8083/8084/8883/18083）、Apache IoTDB 2.0.11（6667，REST 18080）、Nacos 3.0.3（8848 服务端、9848/9849 gRPC、8080 控制台）。当前代码已接入 MySQL、Nacos、EMQX、IoTDB（设备状态/心跳时序）以及 Ollama；Redis 预留给后续缓存/会话场景，尚未接入业务代码。
+中间件部署在 `你的IP地址`：MySQL 9.7.2（3306/3307）、Redis 8.10.2（6379）、EMQX 5.8.9（1883/8083/8084/8883/18083）、Apache IoTDB 2.0.11（6667，REST 18080）、Nacos 3.0.3（8848 服务端、9848/9849 gRPC、8080 控制台）。当前代码已接入 MySQL、Nacos、EMQX、IoTDB（设备状态/心跳时序）以及 Ollama；Redis 预留给后续缓存/会话场景，尚未接入业务代码。
 
 ## 3. 技术栈
 
@@ -87,26 +142,18 @@
 
 ### 4.1 前置条件
 
-- JDK 27（本仓库开发环境使用 `.tools/zulu27-extract/zulu27.28.101-ca-jdk27.0.0-win_x64`）
-- Maven 3.10（开发环境使用 `.tools/apache-maven-3.10.0`）
+- JDK 27（本仓库开发环境使用 `zulu27-extract/zulu27.28.101-ca-jdk27.0.0-win_x64`）
+- Maven 3.10（开发环境使用 `apache-maven-3.10.0`）
 - Node.js 24+（开发环境使用 `D:\nodejs`，必须调用 `npm.cmd`）
-- 可访问 `192.168.3.44` 的 MySQL 3306/3307
-- 可访问 `192.168.3.44:8848` 的 Nacos 3.0.3
-- 可访问 `192.168.3.44:11434` 的 Ollama（仅 AI 助手需要；不启动 AI 服务时可不部署）
+- 可访问 `你的IP地址` 的 MySQL 3306/3307
+- 可访问 `你的IP地址:8848` 的 Nacos 3.0.3
+- 可访问 `你的IP地址:11434` 的 Ollama（仅 AI 助手需要；不启动 AI 服务时可不部署）
 - 已执行数据库初始化脚本
 
 ### 4.2 构建
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/dev/build.ps1
-```
-
-或手动：
-
-```powershell
-$env:JAVA_HOME = 'D:\workspace\opencode\.tools\zulu27-extract\zulu27.28.101-ca-jdk27.0.0-win_x64'
-$env:Path = "$env:JAVA_HOME\bin;D:\workspace\opencode\.tools\apache-maven-3.10.0\bin;$env:Path"
-mvn.cmd -DskipTests package
 ```
 
 构建产物位于各模块 `target/*.jar`。
@@ -119,7 +166,7 @@ mvn.cmd test
 
 当前测试覆盖金额截断、雪花 ID 唯一性、8 个物理分片覆盖和统一响应/分页结构。
 
-前端构建（前端是独立仓库 `company-platform-frontend`，与后端同级放置）：
+前端构建（前端是独立仓库 `company-platform-web`，与后端同级放置）：
 
 ```powershell
 cd ../company-platform-web
@@ -127,7 +174,7 @@ npm.cmd install
 npm.cmd run build
 ```
 
-产物位于 `company-platform-web/dist/`。前端依赖与 OAuth2 回调注册说明见 `company-platform-frontend/README.md`。
+产物位于 `company-platform-web/dist/`。前端依赖与 OAuth2 回调注册说明见 `company-platform-web/README.md`。
 
 ### 4.3 数据库初始化
 
@@ -163,23 +210,19 @@ bash scripts/remote/verify-db.sh
 bash scripts/remote/clean-smoke-data.sh
 ```
 
-应用账号：`company_app` / `Company@2026`（开发环境，生产必须修改）。MySQL root：`root` / `root`（仅开发环境）。
-
 > 若主机重启后 3307 未启动，通常是 `mysql2.service` 的 `ExecStartPre` 以 `mysql` 用户创建 `/run/mysqld2` 失败。安装 `scripts/remote/mysql2-runtime-dirs.conf` 到 `/etc/systemd/system/mysql2.service.d/runtime-dirs.conf`，执行 `systemctl daemon-reload` 后重启服务即可。
 
 ### 4.4 Nacos 注册中心
 
-Nacos 3.0.3 独立部署在 `192.168.3.44`：
+Nacos 3.0.3 独立部署在 `你的IP地址`：
 
 - 服务端：`8848`（HTTP）、`9848/9849`（gRPC）
-- 控制台：`http://192.168.3.44:8080/`
-- 健康检查：`http://192.168.3.44:8848/nacos/actuator/health`
+- 控制台：`http://你的IP地址:8080/`
+- 健康检查：`http://你的IP地址:8848/nacos/actuator/health`
 - 发行包：`https://download.nacos.io/nacos-server/nacos-server-3.0.3.zip`
 
 远程主机上已把 Nacos 注册为 systemd 服务（`nacos.service`，`wy` 用户运行，随系统启动）：
 
-```bash
-ssh wy@192.168.3.44
 
 # 状态 / 重启 / 日志
 sudo systemctl status nacos
@@ -189,7 +232,7 @@ sudo journalctl -u nacos -n 100 --no-pager
 # 首次安装或更新 unit（仓库内脚本）
 cd /path/to/company-platform
 bash scripts/remote/install-nacos-service.sh
-```
+`$lang
 
 如需临时前台调试，可先停止 systemd 服务，再使用 Nacos 自带脚本：
 
@@ -210,14 +253,14 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
-        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        server-addr: ${NACOS_SERVER_ADDR:你的IP地址:8848}
+        ip: ${NACOS_CLIENT_IP:你的IP地址}
         group: ${NACOS_GROUP:DEFAULT_GROUP}
         namespace: ${NACOS_NAMESPACE:}
 ```
 
 - `NACOS_SERVER_ADDR`：Nacos 地址，默认内网地址。
-- `NACOS_CLIENT_IP`：注册到 Nacos 的本机地址；默认值 `192.168.3.43` 是当前开发机 Wi-Fi 地址。换机器或网络变化时必须改为该机器的内网 IP，或直接设置此环境变量。
+- `NACOS_CLIENT_IP`：注册到 Nacos 的本机地址；默认值 `你的IP地址` 是当前开发机 Wi-Fi 地址。换机器或网络变化时必须改为该机器的内网 IP，或直接设置此环境变量。
 - `NACOS_GROUP` / `NACOS_NAMESPACE`：开发和测试默认使用 `DEFAULT_GROUP` 与 public 命名空间。
 - `start-all.ps1 -NacosServer http://<host>:8848` 可临时切换注册中心地址。
 
@@ -258,17 +301,17 @@ cd ../company-platform-web
 npm.cmd run dev
 ```
 
-访问 `http://localhost:5173`，使用认证中心种子账号登录。通过内网 IP 访问时使用 `http://192.168.3.43:5173`，认证中心地址会自动推导为 `http://192.168.3.43:9000`；该回调地址已注册到开发环境的 `pc-web` 客户端。若更换主机或端口，必须同步更新 `OAuth2ClientConfig` 中的 redirect URI 和 post-logout URI。
+访问 `http://localhost:5173`，使用认证中心种子账号登录。通过内网 IP 访问时使用 `http://你的IP地址:5173`，认证中心地址会自动推导为 `http://你的IP地址:9000`；该回调地址已注册到开发环境的 `pc-web` 客户端。若更换主机或端口，必须同步更新 `OAuth2ClientConfig` 中的 redirect URI 和 post-logout URI。
 
 前端日志位于 `.run/web.log` / `.run/web.err.log`，`stop-all.ps1` 和 `status.ps1` 已包含前端进程。
 
 ### 4.7 本地 Ollama 模型（AI 助手）
 
-AI 助手使用内网服务器 `192.168.3.44` 上的 Ollama + Qwen3-4B，避免把业务数据发往云端。服务器无 NVIDIA GPU，当前为 CPU 推理，适合少量管理人员的摘要/问答，不适合高并发。
+AI 助手使用内网服务器 `你的IP地址` 上的 Ollama + Qwen3-4B，避免把业务数据发往云端。服务器无 NVIDIA GPU，当前为 CPU 推理，适合少量管理人员的摘要/问答，不适合高并发。
 
 部署信息：
 
-- Ollama 0.40.8：`/usr/local/bin/ollama`，systemd 服务 `ollama.service`，以 `wy` 用户运行
+- Ollama 0.40.8：`/usr/local/bin/ollama`，systemd 服务 `ollama.service`
 - 监听：`0.0.0.0:11434`，模型目录 `/home/wy/.ollama/models`
 - 关键环境变量：`OLLAMA_CONTEXT_LENGTH=8192`、`OLLAMA_MAX_LOADED_MODELS=1`、`OLLAMA_NUM_PARALLEL=1`、`OLLAMA_KEEP_ALIVE=30m`
 - 服务器 4 vCPU / 15 GB，无 NVIDIA GPU、无 swap；模型加载后可用内存约 6 GB，不要同时部署其他大内存服务
@@ -276,8 +319,6 @@ AI 助手使用内网服务器 `192.168.3.44` 上的 Ollama + Qwen3-4B，避免�
 
 远程操作：
 
-```bash
-ssh wy@192.168.3.44
 
 # 查看服务与日志
 sudo systemctl status ollama
@@ -290,12 +331,12 @@ ollama ps
 
 # 健康检查
 curl -s http://127.0.0.1:11434/api/tags
-```
+`$lang
 
-工具调用联调（在任意能访问 `192.168.3.44:11434` 的机器执行）：
+工具调用联调（在任意能访问 `你的IP地址:11434` 的机器执行）：
 
 ```bash
-curl -s http://192.168.3.44:11434/api/chat -H 'Content-Type: application/json' -d '{
+curl -s http://你的IP地址:11434/api/chat -H 'Content-Type: application/json' -d '{
   "model": "qwen3:4b-instruct-2507-q4_K_M",
   "stream": false,
   "messages": [
@@ -315,10 +356,10 @@ curl -s http://192.168.3.44:11434/api/chat -H 'Content-Type: application/json' -
 
 2026-10-22 已完成模型拉取和联调：直接请求上述 `/api/chat` 返回 `tool_calls`（`get_order_summary`，空参数对象），说明 Ollama 的工具调用模板可用；首个请求含模型加载约 18 秒，随后同一模型约 6 秒返回工具调用。AgentScope 端到端结果见 7.10.1。
 
-`platform-ai` 默认连接 `http://192.168.3.44:11434`，可用环境变量覆盖：
+`platform-ai` 默认连接 `http://你的IP地址:11434`，可用环境变量覆盖：
 
 ```powershell
-$env:OLLAMA_BASE_URL = 'http://192.168.3.44:11434'
+$env:OLLAMA_BASE_URL = 'http://你的IP地址:11434'
 $env:OLLAMA_MODEL = 'qwen3:4b-instruct-2507-q4_K_M'
 ```
 
@@ -396,7 +437,7 @@ mysql -h127.0.0.1 -P3307 -ucompany_app -p company_order1 < scripts/remote/clean-
 
 | client_id | 认证方式 | Grant | 用途 |
 | --- | --- | --- | --- |
-| `pc-web` | `none`（公共客户端） | authorization_code（注册了 refresh_token，但 Spring Authorization Server 1.5 默认不向公共客户端签发 refresh token） | PC Web，强制 PKCE；开发回调包括 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://192.168.3.43:5173` 下的 `/login/oauth2/code/pc-web` |
+| `pc-web` | `none`（公共客户端） | authorization_code（注册了 refresh_token，但 Spring Authorization Server 1.5 默认不向公共客户端签发 refresh token） | PC Web，强制 PKCE；开发回调包括 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://你的IP地址:5173` 下的 `/login/oauth2/code/pc-web` |
 | `ops-client` | client_secret_basic/post | client_credentials | 运维/服务间调用，开发密钥 `ops-secret-2026` |
 
 客户端凭证令牌示例：
@@ -440,8 +481,8 @@ curl -s -X POST http://localhost:9000/oauth2/token \
 
 ### 6.1 物理布局
 
-- `ds_0`：`jdbc:mysql://192.168.3.44:3306/company_order0`
-- `ds_1`：`jdbc:mysql://192.168.3.44:3307/company_order1`
+- `ds_0`：`jdbc:mysql://你的IP地址:3306/company_order0`
+- `ds_1`：`jdbc:mysql://你的IP地址:3307/company_order1`
 - 每个库：`t_order_0`、`t_order_1`、`t_order_2`、`t_order_3`
 
 ### 6.2 路由规则
@@ -958,7 +999,7 @@ company_order1(3307)   ┘   (只读 ETL)      (只读事实表)        /api/bi/
 - 默认密码、数据库口令、`ops-client` 密钥均为开发值，生产必须通过环境变量或配置中心替换。
 - JWT 签名密钥库 `platform-auth/src/main/resources/auth-jwt.p12` 是开发密钥，生产必须更换并妥善保管；`changeit` 仅为开发口令。
 - 网关和资源服务器的 `jwk-set-uri`、认证服务的 `issuer` 目前使用 `localhost`。部署到多机/容器后必须改为内网服务地址或域名，并保证 issuer 与前端配置一致。
-- CORS 白名单目前包含本地开发地址和 `192.168.3.43:5173`，生产需按实际前端域名配置并移除宽泛来源。
+- CORS 白名单目前包含本地开发地址和 `你的IP地址:5173`，生产需按实际前端域名配置并移除宽泛来源。
 - 尚未启用 HTTPS、域名、ICP、WAF、限流、审计日志、JWT 吊销和单点登出。
 - EMQX Dashboard 开发口令为 `root@123`，MySQL/Redis/IoTDB 使用 `root`；Nacos 鉴权配置见 4.4。生产必须启用认证/ACL/TLS 并修改全部默认口令。
 - Nacos 服务端 API 鉴权当前为关闭状态，仅适用于内网开发；生产必须开启鉴权、创建业务账号、配置客户端用户名/密码，并限制 8848/9848/9849/8080 的访问来源。
@@ -1028,14 +1069,14 @@ DELETE FROM oauth2_authorization;
 先检查 Nacos 健康状态和服务列表：
 
 ```powershell
-Invoke-RestMethod http://192.168.3.44:8848/nacos/actuator/health
-Invoke-RestMethod "http://192.168.3.44:8848/nacos/v1/ns/service/list?pageNo=1&pageSize=20&namespaceId=public"
+Invoke-RestMethod http://你的IP地址:8848/nacos/actuator/health
+Invoke-RestMethod "http://你的IP地址:8848/nacos/v1/ns/service/list?pageNo=1&pageSize=20&namespaceId=public"
 ```
 
 如果服务列表为空或实例 IP 不正确：
 
 1. 确认各服务日志中出现 `nacos registry, DEFAULT_GROUP ... register finished`；
-2. 确认 `NACOS_CLIENT_IP` 是当前开发机的内网地址（默认 `192.168.3.43`），不是虚拟网卡或回环地址；
+2. 确认 `NACOS_CLIENT_IP` 是当前开发机的内网地址（默认 `你的IP地址`），不是虚拟网卡或回环地址；
 3. 确认网关能访问 Nacos 返回的实例 IP/端口；
 4. 确认 Nacos 服务端没有开启鉴权，或客户端已正确配置 `username/password`。
 
@@ -1055,7 +1096,7 @@ Invoke-RestMethod "http://192.168.3.44:8848/nacos/v1/ns/service/list?pageNo=1&pa
 按以下顺序排查：
 
 1. `platform-ai` 是否已启动并注册 Nacos：`http://localhost:9106/actuator/health`，Nacos 服务列表应包含 `platform-ai`。
-2. Ollama 是否可达：`curl http://192.168.3.44:11434/api/tags`；Windows 开发机也要能访问该地址。
+2. Ollama 是否可达：`curl http://你的IP地址:11434/api/tags`；Windows 开发机也要能访问该地址。
 3. 模型是否已拉取：`ollama list` 中必须有 `qwen3:4b-instruct-2507-q4_K_M`；首次加载查看 `journalctl -u ollama -n 100 --no-pager`。
 4. 网关是否已重启并加载 `/api/ai/**` 路由；旧网关进程不会自动读取新配置。
 5. 用户令牌是否包含 `ai:assistant:use`；权限是签发时写入 JWT 的，执行 `sql/17-ai-assistant.sql` 后必须重新登录。
@@ -1097,3 +1138,20 @@ Invoke-RestMethod "http://192.168.3.44:8848/nacos/v1/ns/service/list?pageNo=1&pa
 - `docs/设备接入配置模板与报文示例-v1.0.md`：设备上报配置与报文
 - `docs/页面原型清单与权限矩阵-v1.0.md`：页面与权限
 - `company-platform-frontend` 仓库（`company-platform-web/README.md`）：PC Web 启动、环境变量、OAuth2 回调和部署说明
+
+## 12. 页面截图
+
+> PC Web 每个页面与路由、截图文件的完整对照表见前端仓库 `company-platform-frontend` 的「10. 页面截图」章节；截图文件统一存放于前端仓库的 `docs/screenshots/`，本后端仓库不提交截图二进制文件。下表是后端交付面最常用的几张：
+
+| 交付面 | 截图文件 | 说明 |
+| --- | --- | --- |
+| 统一认证 | `docs/screenshots/web-login.png` | OAuth2 授权码 + PKCE 登录入口与认证中心跳转 |
+| 经营指标（工作台） | `docs/screenshots/web-dashboard.png` | KPI 卡片、近 12 个月订单/收款趋势、本月订单状态环图、风险与待办、「待数据源」条、指标口径弹窗 |
+| 经营大屏 | `docs/screenshots/web-cockpit.png` | 16:9 暗色驾驶舱：6 个 KPI 卡、订单与收款趋势、设备状态环图、工厂订单对比、风险预警；支持全屏与 5 分钟自动刷新 |
+| 财务与信用 | `docs/screenshots/web-credit.png` | 授信额度占用、可用额度、最大逾期与风险标签 |
+| 设备与排产 | `docs/screenshots/web-schedule.png` | 设备台账、生产中工单与 FIFO 等待队列 |
+| 仓储 | `docs/screenshots/web-warehouse.png` | 仓库档案、物料档案、库存台账与采购入库 |
+| 审批中心 | `docs/screenshots/web-approval.png` | 我的待办 / 我的申请、审批轨迹与金额档位 |
+| AI 助手 | `docs/screenshots/web-assistant.png` | 只读问答与工具调用过程（审计写入 `ai_chat_log`） |
+
+后端本身没有独立 Web 界面，可对外展示的是 Nacos 控制台（`http://你的IP地址:8080/`）与各服务健康检查端点（`/actuator/health`）。

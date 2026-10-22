@@ -1,9 +1,11 @@
-# Ubuntu 192.168.3.44 中间件安装说明
+# Ubuntu 中间件安装说明
 
 > 安装日期：2026-10-20
 > 主机：Ubuntu 26.04.1 LTS (resolute)，4 核 / 15 GiB 内存，系统盘约 43 GiB 可用
 > 登录：`wy` / `root`（sudo 同密码）
 > 用途：公司管理系统开发/联调环境（MySQL 双实例模拟分库分表、Redis、EMQX、IoTDB）
+>
+> 下文所有 `你的IP地址` 均指中间件服务器的实际内网地址，请按现场环境替换。
 
 ## 1. 组件与端口
 
@@ -27,11 +29,11 @@
 | Redis | `PONG`，版本 8.10.2，端口 6379 |
 | EMQX | 5.8.9 已启动，Dashboard HTTP 200，`admin / root@123` 登录成功 |
 | IoTDB | 6667/18080 监听，`root.demo` 库与示例测点可查 |
-| 远程 MySQL 3306 | `mysql -h192.168.3.44 -P3306 -uwy -proot` 验证通过 |
-| 远程 MySQL 3307 | `mysql -h192.168.3.44 -P3307 -uwy -proot` 验证通过 |
-| 远程 Redis | `redis-cli -h192.168.3.44 -p6379 -a root ping` 返回 `PONG` |
-| 远程 IoTDB | `start-cli.sh -h192.168.3.44 -p6667` 可查 `root.demo` |
-| 远程 EMQX Dashboard | `http://192.168.3.44:18083/` 返回 HTTP 200 |
+| 远程 MySQL 3306 | `mysql -h你的IP地址 -P3306 -uwy -proot` 验证通过 |
+| 远程 MySQL 3307 | `mysql -h你的IP地址 -P3307 -uwy -proot` 验证通过 |
+| 远程 Redis | `redis-cli -h你的IP地址 -p6379 -a root ping` 返回 `PONG` |
+| 远程 IoTDB | `start-cli.sh -h你的IP地址 -p6667` 可查 `root.demo` |
+| 远程 EMQX Dashboard | `http://你的IP地址:18083/` 返回 HTTP 200 |
 
 一键复验：
 
@@ -53,13 +55,13 @@ bash /home/wy/setup/99-verify.sh
 ## 4. 客户端连接
 
 ```text
-MySQL 3306 : jdbc:mysql://192.168.3.44:3306/<db>    wy / root
-MySQL 3307 : jdbc:mysql://192.168.3.44:3307/<db>    wy / root
-Redis      : 192.168.3.44:6379                      密码 root
-MQTT       : tcp://192.168.3.44:1883                默认未开启认证（仅内网开发）
-EMQX Dash  : http://192.168.3.44:18083              admin / root@123
-IoTDB      : 192.168.3.44:6667                      root / root
-IoTDB REST : http://192.168.3.44:18080/rest/v1/...
+MySQL 3306 : jdbc:mysql://你的IP地址:3306/<db>    wy / root
+MySQL 3307 : jdbc:mysql://你的IP地址:3307/<db>    wy / root
+Redis      : 你的IP地址:6379                      密码 root
+MQTT       : tcp://你的IP地址:1883                默认未开启认证（仅内网开发）
+EMQX Dash  : http://你的IP地址:18083              admin / root@123
+IoTDB      : 你的IP地址:6667                      root / root
+IoTDB REST : http://你的IP地址:18080/rest/v1/...
 ```
 
 ## 5. 常用命令
@@ -78,7 +80,7 @@ redis-cli --no-auth-warning -a root ping
 # EMQX
 sudo emqx ctl status
 sudo emqx ctl admins passwd admin 'root@123'
-# Dashboard: http://192.168.3.44:18083
+# Dashboard: http://你的IP地址:18083
 
 # IoTDB CLI
 /opt/iotdb/sbin/start-cli.sh -h 127.0.0.1 -p 6667 -u root -pw root
@@ -131,5 +133,5 @@ IoTDB 配置要点：
 
 1. 修改 MySQL / Redis / EMQX / IoTDB 默认密码；
 2. 为 EMQX 开启认证与 ACL，不要保持匿名接入；
-3. 使用防火墙仅放行 192.168.3.0/24；
+3. 使用防火墙仅放行 你的IP地址网段/24；
 4. 生产环境启用 TLS（MySQL、Redis、EMQX、IoTDB）。
