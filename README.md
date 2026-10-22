@@ -1138,6 +1138,7 @@ Invoke-RestMethod "http://你的IP地址:8848/nacos/v1/ns/service/list?pageNo=1&
 - `docs/设备接入配置模板与报文示例-v1.0.md`：设备上报配置与报文
 - `docs/页面原型清单与权限矩阵-v1.0.md`：页面与权限
 - `company-platform-frontend` 仓库（`company-platform-web/README.md`）：PC Web 启动、环境变量、OAuth2 回调和部署说明
+- `company-platform-frontend` 仓库（`company-platform-web/docs/操作手册-分角色指南-v1.0.md`）：分角色图文操作手册（87 张界面截图 + 6 张架构流程图）
 
 ## 12. 页面截图
 
