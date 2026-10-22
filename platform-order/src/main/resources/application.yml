@@ -1,0 +1,129 @@
+# 订单服务配置。
+# 订单数据不使用 Spring 单数据源，而是由 ShardingConfig 手工创建 ShardingSphere 数据源。
+server:
+  port: 9102
+
+spring:
+  application:
+    name: platform-order
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    print-banner: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+app:
+  sharding:
+    # 开发环境打印真实 SQL，便于确认 order_no 是否正确路由；生产建议关闭。
+    sql-show: ${SHARDING_SQL_SHOW:true}
+    # 0 号库：company_order0，4 张订单物理表。
+    ds0:
+      url: jdbc:mysql://192.168.3.44:3306/company_order0?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+      username: company_app
+      password: Company@2026
+    # 1 号库：company_order1，4 张订单物理表。
+    ds1:
+      url: jdbc:mysql://192.168.3.44:3307/company_order1?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+      username: company_app
+      password: Company@2026
+  snowflake:
+    # 多实例部署时 worker-id 必须互不相同，否则可能生成重复订单号。
+    worker-id: ${SNOWFLAKE_WORKER_ID:1}
+    datacenter-id: ${SNOWFLAKE_DATACENTER_ID:1}
+  customer-service:
+    # 通过 Nacos 服务名调用客户服务；RestTemplate 已加 @LoadBalanced。
+    base-url: ${CUSTOMER_SERVICE_URL:http://platform-customer}
+    # 客户服务不可用时快速失败，避免订单事务长时间占用连接。
+    connect-timeout-ms: ${CUSTOMER_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${CUSTOMER_READ_TIMEOUT_MS:5000}
+  approval-service:
+    # 插队申请等业务提交审批单时调用审批中心。
+    base-url: ${APPROVAL_SERVICE_URL:http://platform-approval}
+    connect-timeout-ms: ${APPROVAL_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${APPROVAL_READ_TIMEOUT_MS:5000}
+
+# 设备数据接入配置（初始化默认值；完整模板见 config/application-iot.yml）。
+# 字段语义与《设备接入配置模板与报文示例-v1.0》一致，现场按网络与设备情况修改。
+iot:
+  enabled: ${IOT_ENABLED:true}
+  mqtt:
+    enabled: ${IOT_MQTT_ENABLED:true}
+    host: ${IOT_MQTT_HOST:192.168.3.44}
+    port: ${IOT_MQTT_PORT:1883}
+    client-id: ${IOT_MQTT_CLIENT_ID:company-platform-order}
+    username: ${IOT_MQTT_USERNAME:}
+    password: ${IOT_MQTT_PASSWORD:}
+    qos: 1
+    keep-alive-seconds: 60
+    reconnect-seconds: 10
+  coap:
+    enabled: ${IOT_COAP_ENABLED:true}
+    host: ${IOT_COAP_HOST:0.0.0.0}
+    port: ${IOT_COAP_PORT:5683}
+    max-payload-kb: 64
+  payload:
+    version: v1
+    sign-algorithm: HmacSHA256
+    replay-window-seconds: 120
+    dedupe-window-seconds: 300
+  image:
+    max-size-mb: 5
+    allowed-formats: [jpg, jpeg, png]
+    retention-days: 1095
+  ocr:
+    # 订单号归一化：去掉空格/换行；前缀与正则按现场订单号规则配置。
+    endpoint: ${IOT_OCR_ENDPOINT:}
+    confidence-threshold: 0.90
+    order-no-prefix: ${IOT_OCR_ORDER_NO_PREFIX:}
+    order-no-pattern: ${IOT_OCR_ORDER_NO_PATTERN:}
+  iotdb:
+    enabled: ${IOT_IOTDB_ENABLED:true}
+    host: ${IOT_IOTDB_HOST:192.168.3.44}
+    port: ${IOT_IOTDB_PORT:18080}
+    username: ${IOT_IOTDB_USERNAME:root}
+    password: ${IOT_IOTDB_PASSWORD:root}
+    database: ${IOT_IOTDB_DATABASE:root.device}
+    schema-prefix: device
+    timeout-seconds: 5
+  frequency:
+    order-seconds: 10
+    status-seconds: 30
+    order-report-days: 0
+    image-days: 1095
+    iotdb-years: 3
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - http://192.168.3.43:5173
+      - http://localhost:3000
+      - http://localhost:8080
+
+logging:
+  level:
+    com.company.platform: INFO
+    org.springframework.security: INFO
+    org.apache.shardingsphere: INFO

@@ -1,0 +1,57 @@
+# 流程审批中心配置。
+# 审批定义、实例、任务和记录保存在 company_platform，与客户、合同、财务主数据同库。
+server:
+  port: 9104
+
+spring:
+  application:
+    name: platform-approval
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  datasource:
+    url: jdbc:mysql://192.168.3.44:3306/company_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: company_app
+    password: Company@2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      initialization-fail-timeout: 10000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # 与其他业务服务使用同一认证中心的 JWKS。
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+app:
+  # 客户与合同服务地址：审批通过后回调执行信用额度调整等业务动作。
+  customer-service:
+    base-url: http://platform-customer
+
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    print-banner: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.company.platform: INFO
+    org.springframework.security: INFO

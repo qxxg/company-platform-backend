@@ -1,0 +1,67 @@
+# AI 助手服务配置。
+# 本服务只负责编排 AgentScope、只读工具和审计，不直接修改业务数据。
+server:
+  port: 9106
+
+spring:
+  application:
+    name: platform-ai
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  datasource:
+    # 仅写 AI 对话审计，不读取业务表；业务查询全部通过带用户 JWT 的内部接口。
+    url: jdbc:mysql://192.168.3.44:3306/company_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: company_app
+    password: Company@2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 5000
+      initialization-fail-timeout: 10000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+app:
+  ai:
+    # 本地 Ollama 地址。部署在 192.168.3.44 时，Windows 开发机通过内网访问。
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://192.168.3.44:11434}
+      model: ${OLLAMA_MODEL:qwen3:4b-instruct-2507-q4_K_M}
+      context-length: ${OLLAMA_CONTEXT_LENGTH:8192}
+      max-tokens: ${OLLAMA_MAX_TOKENS:512}
+      temperature: 0.2
+    # 单次对话最大模型轮数，避免 4B 模型在工具调用里反复循环。
+    max-iterations: 4
+    # 阻塞等待模型的总时长；CPU 推理较慢，前端和网关也需要同步放大超时。
+    timeout-seconds: 240
+    state-dir: ${AI_STATE_DIR:./data/ai-sessions}
+    services:
+      order-url: http://platform-order
+      customer-url: http://platform-customer
+      approval-url: http://platform-approval
+      connect-timeout-ms: 2000
+      read-timeout-ms: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.company.platform.ai: DEBUG
+    io.agentscope: INFO

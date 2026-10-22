@@ -1,0 +1,64 @@
+# 客户与合同服务配置。
+# 客户、合同、应收辅助数据保存在 company_platform；订单分片库不复制客户主数据。
+server:
+  port: 9103
+
+spring:
+  application:
+    name: platform-customer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  datasource:
+    url: jdbc:mysql://192.168.3.44:3306/company_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: company_app
+    password: Company@2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      initialization-fail-timeout: 10000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # 订单服务会携带当前用户令牌调用本服务，因此继续使用同一 JWKS。
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    print-banner: false
+
+# 财务单据与审批调用参数：运行时可通过环境变量覆盖。
+app:
+  # 报销单、借款单、还款单号共用的雪花机器号，多实例部署时必须互不相同。
+  snowflake:
+    worker-id: ${SNOWFLAKE_WORKER_ID:3}
+    datacenter-id: ${SNOWFLAKE_DATACENTER_ID:1}
+  # 费用报销/借款提交统一审批中心；审批通过后由审批中心回调本服务。
+  approval-service:
+    base-url: ${APPROVAL_SERVICE_URL:http://platform-approval}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.company.platform: INFO
+    org.springframework.security: INFO

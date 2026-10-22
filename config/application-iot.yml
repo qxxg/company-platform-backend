@@ -1,0 +1,96 @@
+# 设备数据接入配置模板（配套《设备接入配置模板与报文示例-v1.0》与主文档 V1.4 第 6.8 节）。
+#
+# 用法：把本文件按环境（dev/test/prod）复制到订单服务的配置目录，或直接把需要的
+# 片段合并进 platform-order 的 application.yml；Spring Boot 会自动读取
+# `iot` 前缀的配置，缺省值见 DeviceReportingProperties。
+#
+# 原则：
+# - 初始化默认值即可启动，现场按网络与设备情况修改，不需要改代码。
+# - 密钥与口令用环境变量注入，不写死在文件里（示例中的 ${...} 即为环境变量）。
+# - 修改配置需要运维/管理员权限并记录变更。
+
+iot:
+  # 设备数据接入总开关。
+  enabled: true
+
+  # ---------------- MQTT Broker（设备上行首选通道） ----------------
+  mqtt:
+    enabled: true
+    host: ${IOT_MQTT_HOST:192.168.3.44}
+    port: ${IOT_MQTT_PORT:1883}
+    # TLS 时使用 8883；生产建议启用证书。
+    client-id: ${IOT_MQTT_CLIENT_ID:company-platform-order}
+    # 一机一密之外的接入账号；生产禁止匿名接入。
+    username: ${IOT_MQTT_USERNAME:}
+    password: ${IOT_MQTT_PASSWORD:}
+    qos: 1
+    keep-alive-seconds: 60
+    reconnect-seconds: 10
+    # Topic 模板，{deviceNo} 会被替换为设备编号。
+    order-topic: device/{deviceNo}/order
+    image-topic: device/{deviceNo}/image
+    status-topic: device/{deviceNo}/status
+    selfcheck-topic: device/{deviceNo}/selfcheck
+    fault-topic: device/{deviceNo}/fault
+    # 平台回执 Topic（下行）。
+    ack-topic: server/{deviceNo}/ack
+
+  # ---------------- CoAP 服务（备用上行通道） ----------------
+  coap:
+    enabled: true
+    host: 0.0.0.0
+    port: 5683
+    # DTLS 时使用 5684，生产建议启用 PSK。
+    max-payload-kb: 64
+
+  # ---------------- 报文通用配置 ----------------
+  payload:
+    version: v1
+    max-size-kb: 128
+    sign-algorithm: HmacSHA256
+    # 时间戳偏差超过该值视为重放。
+    replay-window-seconds: 120
+    # 按 deviceNo + seq 去重的时间窗口。
+    dedupe-window-seconds: 300
+
+  # ---------------- 订单图片 ----------------
+  image:
+    max-size-mb: 5
+    allowed-formats: [jpg, jpeg, png]
+    # 0 表示永久保留。
+    retention-days: 1095
+
+  # ---------------- OCR 与订单号精确匹配 ----------------
+  ocr:
+    # OCR 服务地址；留空时使用报文内携带的识别结果。
+    endpoint: ${IOT_OCR_ENDPOINT:}
+    connect-timeout-seconds: 3
+    read-timeout-seconds: 10
+    # 低于该置信度转人工处理。
+    confidence-threshold: 0.90
+    # 订单号归一化：去掉空格/换行；前缀与正则按现场订单号规则配置。
+    order-no-prefix: ${IOT_OCR_ORDER_NO_PREFIX:}
+    order-no-pattern: ${IOT_OCR_ORDER_NO_PATTERN:}
+
+  # ---------------- Apache IoTDB（自检/异常/心跳时序数据） ----------------
+  iotdb:
+    enabled: true
+    host: ${IOT_IOTDB_HOST:192.168.3.44}
+    port: ${IOT_IOTDB_PORT:18080}
+    username: ${IOT_IOTDB_USERNAME:root}
+    password: ${IOT_IOTDB_PASSWORD:}
+    database: ${IOT_IOTDB_DATABASE:root.device}
+    # 设备测点 schema 前缀：root.device.device_EQ_F001_01。
+    schema-prefix: device
+    timeout-seconds: 5
+
+  # ---------------- 上报频率与保留周期 ----------------
+  frequency:
+    # 订单作业数据：默认 10 秒一次，后到覆盖先到。
+    order-seconds: 10
+    # 状态/心跳：默认 30 秒一次。
+    status-seconds: 30
+    # 订单作业数据保留天数（0 表示永久）。
+    order-report-days: 0
+    image-days: 1095
+    iotdb-years: 3

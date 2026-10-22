@@ -1,0 +1,19 @@
+[Unit]
+Description=Nacos Server 3.0.3 (standalone)
+Documentation=https://nacos.io/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wy
+Group=wy
+WorkingDirectory=/home/wy/nacos-3.0.3
+ExecStart=/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Xms512m -Xmx512m -Xmn256m -Dnacos.standalone=true -Dnacos.member.list= -Xlog:gc*:file=/home/wy/nacos-3.0.3/logs/nacos_gc.log:time,tags:filecount=10,filesize=100m -Dnacos.deployment.type=merged -Dloader.path=/home/wy/nacos-3.0.3/plugins,/home/wy/nacos-3.0.3/plugins/health,/home/wy/nacos-3.0.3/plugins/cmdb,/home/wy/nacos-3.0.3/plugins/selector -Dnacos.home=/home/wy/nacos-3.0.3 -jar /home/wy/nacos-3.0.3/target/nacos-server.jar --spring.config.additional-location=file:/home/wy/nacos-3.0.3/conf/ --logging.config=/home/wy/nacos-3.0.3/conf/nacos-logback.xml --server.max-http-request-header-size=524288 nacos.nacos
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

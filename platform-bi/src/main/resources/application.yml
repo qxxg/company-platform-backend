@@ -1,0 +1,71 @@
+# 首页大屏 / BI 聚合服务配置。
+# 本服务只读业务库，把结果写入 company_bi 集市；看板查询只访问 company_bi。
+server:
+  port: 9105
+
+spring:
+  application:
+    name: platform-bi
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  datasource:
+    url: jdbc:mysql://192.168.3.44:3306/company_bi?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: company_app
+    password: Company@2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 5000
+      initialization-fail-timeout: 10000
+  sql:
+    init:
+      mode: never
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+app:
+  bi:
+    # 5 分钟刷新一次，满足 V1.4 经营指标 5–15 分钟刷新要求。
+    refresh-ms: ${BI_REFRESH_MS:300000}
+    initial-delay-ms: ${BI_INITIAL_DELAY_MS:15000}
+    # 业务主库：客户、财务、审批；生产环境应换成 BI 只读账号。
+    platform:
+      url: jdbc:mysql://192.168.3.44:3306/company_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${BI_SOURCE_USERNAME:company_app}
+      password: ${BI_SOURCE_PASSWORD:Company@2026}
+      pool-size: 2
+    # 订单分片 0：订单、设备、排产、仓储。
+    order0:
+      url: jdbc:mysql://192.168.3.44:3306/company_order0?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${BI_SOURCE_USERNAME:company_app}
+      password: ${BI_SOURCE_PASSWORD:Company@2026}
+      pool-size: 2
+    # 订单分片 1：只有订单物理表。
+    order1:
+      url: jdbc:mysql://192.168.3.44:3307/company_order1?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${BI_SOURCE_USERNAME:company_app}
+      password: ${BI_SOURCE_PASSWORD:Company@2026}
+      pool-size: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.company.platform.bi: info

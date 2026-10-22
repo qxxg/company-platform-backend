@@ -1,0 +1,62 @@
+# 系统服务配置。
+# 使用 company_platform 库读取用户、工厂和角色权限基础数据。
+server:
+  port: 9101
+
+spring:
+  application:
+    name: platform-system
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+  datasource:
+    # 与认证中心共用 company_platform；生产环境应按服务拆分账号权限。
+    url: jdbc:mysql://192.168.3.44:3306/company_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: company_app
+    password: Company@2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      initialization-fail-timeout: 10000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    print-banner: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+app:
+  cors:
+    # 开发环境前端来源；生产改为精确域名并开启 HTTPS。
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - http://192.168.3.43:5173
+      - http://localhost:3000
+      - http://localhost:8080
+
+logging:
+  level:
+    com.company.platform: INFO
+    org.springframework.security: INFO

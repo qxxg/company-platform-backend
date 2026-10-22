@@ -1,0 +1,101 @@
+# API 网关配置。
+# 网关是 PC Web 的唯一入口，负责 JWT 验签、路由、CORS 和请求追踪。
+server:
+  port: 8080
+
+spring:
+  application:
+    name: platform-gateway
+  main:
+    # 网关基于 WebFlux，不能引入 Servlet 栈，否则过滤链和 CORS 行为会冲突。
+    web-application-type: reactive
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:192.168.3.44:8848}
+        ip: ${NACOS_CLIENT_IP:192.168.3.43}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: true
+    # Spring Cloud Gateway 4.3 起配置迁移到 server.webflux 命名空间；
+    # 旧 spring.cloud.gateway.routes 仍能兼容，但启动时会打印弃用警告。
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              # 关闭自动按服务名生成路由，只允许显式白名单路由，避免意外暴露内部服务。
+              enabled: false
+          routes:
+            # 系统服务：用户、工厂等基础数据。
+            - id: platform-system
+              uri: lb://platform-system
+              predicates:
+                - Path=/api/system/**
+            # 客户与合同服务：客户主数据、合同录入和下单前置校验。
+            - id: platform-customer
+              uri: lb://platform-customer
+              predicates:
+                - Path=/api/customer/**
+            # 财务应收/收款当前托管在客户服务，和信用、合同共用 company_platform；
+            # 后续拆分独立财务服务时只需改这里的 uri，前端路径保持不变。
+            - id: platform-finance
+              uri: lb://platform-customer
+              predicates:
+                - Path=/api/finance/**
+            # 订单服务：订单创建、详情和分页查询。
+            - id: platform-order
+              uri: lb://platform-order
+              predicates:
+                - Path=/api/order/**
+            # 流程审批中心：审批定义、申请、待办与审批动作。
+            - id: platform-approval
+              uri: lb://platform-approval
+              predicates:
+                - Path=/api/approval/**
+            # 首页大屏 / BI 聚合：只返回只读指标，不承接业务写入。
+            - id: platform-bi
+              uri: lb://platform-bi
+              predicates:
+                - Path=/api/bi/**
+            # AI 助手：本地 4B 模型在 CPU 上推理较慢，单独放大响应超时。
+            # 该服务只读，且仍校验用户 JWT 和 ai:assistant:use 权限。
+            - id: platform-ai
+              uri: lb://platform-ai
+              predicates:
+                - Path=/api/ai/**
+              metadata:
+                connect-timeout: 3000
+                response-timeout: 300000
+            # 设备数据上报入口：设备用一机一密密钥验签上报，不走 OAuth 令牌。
+            - id: platform-order-iot
+              uri: lb://platform-order
+              predicates:
+                - Path=/api/iot/**
+          default-filters:
+            # 下游服务和网关都可能写 CORS 头，去重后只保留一份，否则浏览器会拒绝响应。
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 10s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # 公钥从认证中心 JWKS 获取；生产环境建议使用内网域名并开启 HTTPS。
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.company.platform: INFO
+    org.springframework.security: INFO
+    org.springframework.cloud.gateway: INFO
