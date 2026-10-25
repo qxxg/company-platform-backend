@@ -1,0 +1,16 @@
+# 构建上下文只需要各模块的 target JAR 和本 Dockerfile。
+.git
+.idea
+.run
+data
+docs
+scripts
+sql
+config
+*.log
+**/src
+**/target/classes
+**/target/generated-sources
+**/target/maven-*
+**/target/test-classes
+**/*.original

@@ -57,6 +57,35 @@ public class OAuth2ClientConfig {
             "ai.use", "bi.read");
 
     /**
+     * PC Web 允许的前端来源。
+     *
+     * <p>开发环境保留 localhost/127.0.0.1 与旧开发机地址；生产容器部署使用
+     * 服务器内网 IP 的 80 端口，同时保留 5173 以便直接调试 Vite。</p>
+     */
+    private static final List<String> PC_WEB_ORIGINS = List.of(
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://192.168.3.43:5173",
+            "http://192.168.3.50",
+            "http://192.168.3.50:5173");
+
+    /** OAuth2 授权码回调路径，必须与前端 OAUTH_CALLBACK_PATH 一致。 */
+    private static final String PC_WEB_CALLBACK_PATH = "/login/oauth2/code/pc-web";
+
+    /**
+     * 为 pc-web 客户端补齐所有允许来源的回调地址和登出地址。
+     *
+     * <p>Spring Authorization Server 会严格校验 redirect_uri，部署到新 IP 时
+     * 仅改 Nginx 或前端环境变量不够，必须同步注册这里的回调地址。</p>
+     */
+    private static void addPcWebRedirectUris(RegisteredClient.Builder builder) {
+        for (String origin : PC_WEB_ORIGINS) {
+            builder.redirectUri(origin + PC_WEB_CALLBACK_PATH);
+            builder.postLogoutRedirectUri(origin + "/");
+        }
+    }
+
+    /**
      * 创建 JDBC 客户端仓库，并在首次启动时写入内置客户端。
      *
      * <p>如果 pc-web 已存在，则补齐内网开发回调地址。这样从 localhost 或
@@ -73,12 +102,11 @@ public class OAuth2ClientConfig {
         if (pcWeb == null) {
             repository.save(pcWebClient());
         } else {
-            // 开发机可能通过 localhost 或内网 IP 打开前端。已存在的客户端也要补齐
-            // 回调地址，否则 OAuth2 授权码流程会被 redirect_uri 校验拒绝。
-            repository.save(RegisteredClient.from(pcWeb)
-                    .redirectUri("http://192.168.3.43:5173/login/oauth2/code/pc-web")
-                    .postLogoutRedirectUri("http://192.168.3.43:5173/")
-                    .build());
+            // 开发机/部署服务器可能通过 localhost 或不同内网 IP 打开前端。已存在
+            // 的客户端也要补齐回调地址，否则授权码流程会被 redirect_uri 校验拒绝。
+            RegisteredClient.Builder builder = RegisteredClient.from(pcWeb);
+            addPcWebRedirectUris(builder);
+            repository.save(builder.build());
         }
         RegisteredClient ops = repository.findByClientId("ops-client");
         if (ops == null) {
@@ -117,17 +145,14 @@ public class OAuth2ClientConfig {
      * 在重定向过程中被截获后直接兑换。公开客户端不配置 client_secret。</p>
      */
     private static RegisteredClient pcWebClient() {
-        return RegisteredClient.withId(UUID.randomUUID().toString())
+        RegisteredClient.Builder builder = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("pc-web")
                 .clientName("Company Platform PC Web")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri("http://localhost:5173/login/oauth2/code/pc-web")
-                .redirectUri("http://127.0.0.1:5173/login/oauth2/code/pc-web")
-                .redirectUri("http://192.168.3.43:5173/login/oauth2/code/pc-web")
-                .postLogoutRedirectUri("http://localhost:5173/")
-                .postLogoutRedirectUri("http://192.168.3.43:5173/")
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN);
+        addPcWebRedirectUris(builder);
+        return builder
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
                 .scope("system.read")
